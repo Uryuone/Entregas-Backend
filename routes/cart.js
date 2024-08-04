@@ -46,6 +46,5 @@ module.exports = (io) => {
       res.status(404).send('Cart or Product not found');
     }
   });
-
   return router;
 };

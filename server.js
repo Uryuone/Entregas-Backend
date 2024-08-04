@@ -1,49 +1,74 @@
 const express = require('express');
-const { create } = require('express-handlebars');
-const http = require('http');
-const socketIo = require('socket.io');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const { engine } = require('express-handlebars');
+const path = require('path');
 const fs = require('fs');
-const productsRouter = require('./routes/products');
-const cartRouter = require('./routes/cart');
 
+// Inicializa la aplicación de Express
 const app = express();
 const port = 8080;
 
-// Configurar Handlebars
-const hbs = create({ extname: '.handlebars' });
-app.engine('.handlebars', hbs.engine);
-app.set('view engine', '.handlebars');
-app.set('views', './views');
+// Crear el servidor HTTP
+const httpServer = createServer(app);
 
-// Configurar el servidor HTTP y Socket.io
-const server = http.createServer(app);
-const io = socketIo(server);
+// Inicializa Socket.io
+const io = new Server(httpServer);
 
+// Configurar Handlebars como el motor de plantillas
+app.engine('handlebars', engine({
+  defaultLayout: 'main',
+  layoutsDir: path.join(__dirname, 'views', 'layouts')
+}));
+app.set('view engine', 'handlebars');
+app.set('views', path.join(__dirname, 'views'));
+
+// Middleware para manejar JSON
 app.use(express.json());
-app.use('/api/products', productsRouter(io)); // Pasar io a las rutas de productos
-app.use('/api/carts', cartRouter(io)); // Pasar io a las rutas de carritos (si es necesario)
+app.use(express.urlencoded({ extended: true }));
 
+// Archivos estáticos
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Importar los enrutadores
+const productsRouter = require('./routes/products');
+const cartsRouter = require('./routes/carts');
+
+app.use('/api/products', productsRouter);
+app.use('/api/carts', cartsRouter);
+
+// Ruta para la vista home
+app.get('/', (req, res) => {
+  const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
+  res.render('home', { products });
+});
+
+// Ruta para la vista de productos en tiempo real
+app.get('/realtimeproducts', (req, res) => {
+  const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
+  res.render('realTimeProducts', { products });
+});
+
+// Manejar conexiones de Socket.io
 io.on('connection', (socket) => {
-  console.log('New client connected');
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
+  console.log('Nuevo cliente conectado');
+
+  socket.on('newProduct', (product) => {
+    const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
+    products.push(product);
+    fs.writeFileSync('productos.json', JSON.stringify(products, null, 2), 'utf-8');
+    io.emit('updateProducts', products);
+  });
+
+  socket.on('deleteProduct', (productId) => {
+    let products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
+    products = products.filter(p => p.id !== productId);
+    fs.writeFileSync('productos.json', JSON.stringify(products, null, 2), 'utf-8');
+    io.emit('updateProducts', products);
   });
 });
 
-app.get('/', (req, res) => {
-  res.render('home', { products: getProducts() });
+// Inicia el servidor
+httpServer.listen(port, () => {
+  console.log(`Servidor escuchando en el puerto ${port}`);
 });
-
-app.get('/realtimeproducts', (req, res) => {
-  res.render('realTimeProducts', { products: getProducts() });
-});
-
-server.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
-
-// Función para obtener productos (simulación)
-function getProducts() {
-  const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
-  return products;
-}
