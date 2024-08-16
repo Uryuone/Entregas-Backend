@@ -1,0 +1,13 @@
+{{! Extiende del layout principal }}
+{{#extends 'main'}}
+
+{{#block 'title'}}{{product.title}}{{/block}}
+
+{{#block 'body'}}
+    <h1>{{product.title}}</h1>
+    <p>{{product.description}}</p>
+    <p>Categoría: {{product.category}}</p>
+    <p>Precio: ${{product.price}}</p>
+    <p>Disponibilidad: {{#if product.status}}Disponible{{else}}No disponible{{/if}}</p>
+    <button data-id="{{product._id}}">Agregar al carrito</button>
+{{/block}}

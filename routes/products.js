@@ -1,63 +1,35 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
+const Product = require('../models/product');
 
-module.exports = (io) => {
-  // Ruta raíz GET /
-  router.get('/', (req, res) => {
-    const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
-    const limit = req.query.limit ? parseInt(req.query.limit) : products.length;
-    res.json(products.slice(0, limit));
-  });
+// GET con filtros, paginación y ordenamiento
+router.get('/', async (req, res) => {
+    try {
+        const { limit = 10, page = 1, sort, query } = req.query;
+        const filter = query ? { category: query } : {};
 
-  // Ruta GET /:pid
-  router.get('/:pid', (req, res) => {
-    const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
-    const product = products.find(p => p.id === req.params.pid);
-    if (product) {
-      res.json(product);
-    } else {
-      res.status(404).send('Product not found');
+        const products = await Product.find(filter)
+            .limit(limit * 1)
+            .skip((page - 1) * limit)
+            .sort(sort ? { price: sort === 'asc' ? 1 : -1 } : {});
+
+        const count = await Product.countDocuments(filter);
+
+        res.json({
+            status: 'success',
+            payload: products,
+            totalPages: Math.ceil(count / limit),
+            prevPage: page > 1 ? page - 1 : null,
+            nextPage: page * limit < count ? page + 1 : null,
+            page,
+            hasPrevPage: page > 1,
+            hasNextPage: page * limit < count,
+            prevLink: page > 1 ? `/api/products?limit=${limit}&page=${page - 1}` : null,
+            nextLink: page * limit < count ? `/api/products?limit=${limit}&page=${page + 1}` : null
+        });
+    } catch (err) {
+        res.status(500).json({ status: 'error', message: err.message });
     }
-  });
+});
 
-  // Ruta POST /
-  router.post('/', (req, res) => {
-    const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
-    const newProduct = {
-      id: (products.length ? Math.max(...products.map(p => p.id)) + 1 : 1).toString(),
-      ...req.body,
-      status: req.body.status !== undefined ? req.body.status : true
-    };
-    products.push(newProduct);
-    fs.writeFileSync('productos.json', JSON.stringify(products, null, 2));
-    io.emit('updateProducts', products); // Emitir evento de actualización
-    res.status(201).json(newProduct);
-  });
-
-  // Ruta PUT /:pid
-  router.put('/:pid', (req, res) => {
-    const products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
-    const index = products.findIndex(p => p.id === req.params.pid);
-    if (index !== -1) {
-      const updatedProduct = { ...products[index], ...req.body, id: products[index].id };
-      products[index] = updatedProduct;
-      fs.writeFileSync('productos.json', JSON.stringify(products, null, 2));
-      io.emit('updateProducts', products); // Emitir evento de actualización
-      res.json(updatedProduct);
-    } else {
-      res.status(404).send('Product not found');
-    }
-  });
-
-  // Ruta DELETE /:pid
-  router.delete('/:pid', (req, res) => {
-    let products = JSON.parse(fs.readFileSync('productos.json', 'utf-8'));
-    products = products.filter(p => p.id !== req.params.pid);
-    fs.writeFileSync('productos.json', JSON.stringify(products, null, 2));
-    io.emit('updateProducts', products); // Emitir evento de actualización
-    res.status(204).send();
-  });
-
-  return router;
-};
+module.exports = router;

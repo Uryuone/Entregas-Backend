@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productos</title>
+</head>
+<body>
+    <h1>Productos</h1>
+    {{#each products}}
+        <div>
+            <h2>{{this.name}}</h2>
+            <p>{{this.description}}</p>
+            <p>Precio: {{this.price}}</p>
+            <button onclick="addToCart('{{this._id}}')">Agregar al carrito</button>
+        </div>
+    {{/each}}
+    <!-- Paginación -->
+    {{#if hasPrevPage}}<a href="{{prevLink}}">Anterior</a>{{/if}}
+    {{#if hasNextPage}}<a href="{{nextLink}}">Siguiente</a>{{/if}}
+</body>
+<script>
+    function addToCart(productId) {
+        fetch(`/api/carts/123/products/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: 1 })
+        }).then(response => response.json())
+          .then(data => console.log(data));
+    }
+</script>
+</html>
